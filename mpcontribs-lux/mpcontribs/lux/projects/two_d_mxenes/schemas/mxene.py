@@ -8,7 +8,10 @@ Data are from:
 
 from __future__ import annotations
 
-from mpcontribs.lux.projects.two_d_mxenes.schemas.labels import MXeneLabel
+from mpcontribs.lux.projects.two_d_mxenes.schemas.labels import (
+    TERMINATION_SITE_COORDINATION,
+    MXeneLabel,
+)
 from mpcontribs.lux.projects.two_d_mxenes.schemas.properties import MXeneProperties
 from mpcontribs.lux.projects.two_d_mxenes.schemas.structure import (
     MXeneStructure,
@@ -26,7 +29,7 @@ class MXeneEntry(BaseModel):
     On construction the labels are checked against the structure: the
     composition must be M_{n+1}X_nT_x with the labelled elements and n, and
     the coordination sequence measured from the structure must match the
-    stacking label.
+    stacking label and termination site.
     """
 
     model_config = _MODEL_CONFIG
@@ -110,6 +113,15 @@ class MXeneEntry(BaseModel):
                 f"{'-'.join(self.labels.core_sequence)} but the structure has "
                 f"{'-'.join(self.core_sequence)}"
             )
+
+        if self.labels.terminationSite is not None:
+            coord = TERMINATION_SITE_COORDINATION[self.labels.terminationSite]
+            if self.termination_coordination != (coord, coord):
+                raise ValueError(
+                    f"Termination site {self.labels.terminationSite} implies "
+                    f"outer-metal coordination {coord} on both surfaces but the "
+                    f"structure has {self.termination_coordination}"
+                )
         return self
 
     @property

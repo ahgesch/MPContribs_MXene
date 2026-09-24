@@ -25,7 +25,16 @@ SITES = {"A": (0.0, 0.0), "B": (1 / 3, 2 / 3), "C": (2 / 3, 1 / 3)}
 
 @pytest.fixture(scope="module")
 def sample_path(test_data_dir):
-    return test_data_dir / "by_user" / "two_d_mxenes" / "Hf2CF2_h.vasp"
+    return (
+        test_data_dir
+        / "by_user"
+        / "two_d_mxenes"
+        / "MXENE_DATA"
+        / "Hf"
+        / "m2x"
+        / "h-1"
+        / "CONTCAR"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -186,6 +195,19 @@ def test_entry_rejects_wrong_stacking(sample_structure):
         MXeneEntry.from_structure(sample_structure, "t", terminationSite=1)
 
 
+def test_entry_rejects_wrong_termination_site(sample_structure):
+    # the sample is site 1 (octahedral outer metal); labelling it site 2 must fail
+    with pytest.raises(ValidationError, match="Termination site 2"):
+        MXeneEntry.from_structure(sample_structure, "h", terminationSite=2)
+
+
+def test_entry_rejects_mixed_termination_sites():
+    s = ideal_mxene("Ti", "C", 1, ["P", "P", "O"], termination="O")
+    for site in (1, 2):
+        with pytest.raises(ValidationError, match="Termination site"):
+            MXeneEntry.from_structure(s, "h", terminationSite=site)
+
+
 def test_entry_rejects_wrong_composition(sample_structure):
     entry = MXeneEntry.from_structure(sample_structure, "h", terminationSite=1)
     data = entry.model_dump()
@@ -194,13 +216,15 @@ def test_entry_rejects_wrong_composition(sample_structure):
         MXeneEntry.model_validate(data)
 
 
-def test_entry_infers_thick_mxene():
-    s = ideal_mxene(
-        "Ti", "C", 3, ["P"] + expected_core_sequence(3, "h1a") + ["O"], termination="O"
+@pytest.mark.parametrize("site, coord", [(1, "O"), (2, "P")])
+def test_entry_infers_thick_mxene(site, coord):
+    seq = [coord] + expected_core_sequence(3, "h1a") + [coord]
+    entry = MXeneEntry.from_structure(
+        ideal_mxene("Ti", "C", 3, seq, termination="O"), "h1a", terminationSite=site
     )
-    entry = MXeneEntry.from_structure(s, "h1a", terminationSite=2)
     assert entry.labels.formula == "Ti4C3O2"
-    assert entry.termination_coordination == ("P", "O")
+    assert entry.mxeneId == f"Ti4C3O2-h1a-{site}"
+    assert entry.termination_coordination == (coord, coord)
 
 
 # ---- properties -------------------------------------------------------------
@@ -220,7 +244,7 @@ def test_elastic_derivation():
 
 @pytest.fixture
 def dataset(tmp_path, sample_path):
-    """A small dataset tree mimicking MXENE_DATA, including nested Hf folders."""
+    """A small dataset tree mimicking MXENE_DATA, including a nested HfN folder."""
     root = tmp_path / "MXENE_DATA"
     for folder in ["Hf/m2x/h-1", "Hf/m2x/HfN/h-2"]:
         (root / folder).mkdir(parents=True)
@@ -228,6 +252,11 @@ def dataset(tmp_path, sample_path):
     hfn = ideal_mxene("Hf", "N", 1, ["P", "P", "P"], termination="F")
     hfn.to(filename=str(root / "Hf/m2x/HfN/h-2/CONTCAR"), fmt="poscar")
     return root
+
+
+def test_build_entries_from_repo_test_data(test_data_dir):
+    entries = build_entries(test_data_dir / "by_user" / "two_d_mxenes" / "MXENE_DATA")
+    assert [e.mxeneId for e in entries] == ["Hf2CF2-h-1"]
 
 
 def test_build_entries(dataset, tmp_path):

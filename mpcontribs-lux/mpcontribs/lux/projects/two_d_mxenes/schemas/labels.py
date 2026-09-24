@@ -24,10 +24,13 @@ label      n       core coordination sequence (X-M-X-... centres)
 ``h1b``    2, 3    P-O-P..., alternating, starting prismatic
 =========  ======  =================================================
 
-For terminated MXenes a suffix ``-1`` or ``-2`` records which of the two
-possible termination sites was used, which in turn sets whether the outer
-metal layer is octahedrally or prismatically coordinated by the inner X
-layer and the outer T layer.
+For terminated MXenes a suffix ``-1`` or ``-2`` (e.g. ``h-1``, ``h1a-2``)
+records the termination site:
+
+- ``1``: T sits staggered with respect to the X layer beneath the outer metal,
+  so the outer metal layer is **octahedrally** coordinated (``O``);
+- ``2``: T sits directly above X atoms, so the outer metal layer is
+  **prismatically** coordinated (``P``).
 """
 
 from __future__ import annotations
@@ -47,6 +50,9 @@ Coordination = Literal["O", "P"]
 
 _N1_STACKINGS: frozenset[str] = frozenset({"t", "h"})
 _THICK_STACKINGS: frozenset[str] = frozenset({"t", "h1a", "h1b", "h2"})
+
+TERMINATION_SITE_COORDINATION: dict[int, str] = {1: "O", 2: "P"}
+"""Coordination of the outer metal layers implied by each termination site."""
 
 _FOLDER_LABEL = re.compile(r"^(?P<stacking>h1a|h1b|h2|h|t)(?:-(?P<site>[12]))?$")
 
@@ -111,8 +117,10 @@ class MXeneLabel(BaseModel):
     )
     terminationSite: TerminationSite | None = Field(
         None,
-        description="Which of the two termination sites is occupied (the `-1` "
-        "or `-2` suffix of the dataset label). Required for terminated MXenes "
+        description="Termination site (the `1`/`2` suffix of the dataset label): "
+        "1 = outer metal layers octahedrally coordinated (T staggered relative "
+        "to X), 2 = prismatically coordinated (T directly above X). Required "
+        "for terminated MXenes "
         "and null for pristine ones.",
     )
 

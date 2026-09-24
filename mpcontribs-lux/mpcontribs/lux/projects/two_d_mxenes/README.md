@@ -41,7 +41,7 @@ Each atomic layer that lies between two others is **O** (octahedral) if the laye
 | `h1a` | 2, 3 | O-P-O… |
 | `h1b` | 2, 3 | P-O-P… |
 
-For terminated MXenes the suffix `-1`/`-2` selects the termination site, which sets the coordination of the outer metal layers (first and last entries of the sequence). `MXeneEntry` rejects any record whose structure does not match its label.
+For terminated MXenes the suffix sets the coordination of the outer metal layers (first and last entries of the sequence): `-1` = octahedral (T staggered relative to the X layer below), `-2` = prismatic (T directly above X). `MXeneEntry` rejects any record whose structure does not match its stacking label or termination site.
 
 ## Record contents
 

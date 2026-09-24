@@ -1,6 +1,10 @@
 """Build validated MXene entries and MPContribs contributions from raw data.
 
-Usage::
+Check a whole dataset from the command line (reports every failure)::
+
+    python -m mpcontribs.lux.projects.two_d_mxenes.pipelines.build_contributions MXENE_DATA
+
+Use from Python::
 
     from mpcontribs.lux.projects.two_d_mxenes.pipelines.build_contributions import (
         build_entries, load_properties, to_contribution,
@@ -11,7 +15,7 @@ Usage::
     contributions = [to_contribution(e) for e in entries]
 
 Labels are assigned as follows, which keeps the pipeline independent of how
-the dataset's folders are nested (e.g. the extra `ReC/`, `ReN/` levels):
+the dataset's folders are nested (e.g. the extra `ReN/`, `HfN/` levels):
 
 - M, X, T and n are inferred from the composition of each CONTCAR;
 - the stacking label and termination site come from the name of the folder
@@ -121,6 +125,69 @@ def build_entries(
     return [MXeneEntry.model_validate(e.model_dump()) for e in result]
 
 
+def check_dataset(
+    root: str | Path,
+) -> tuple[list[MXeneEntry], list[tuple[Path, str]]]:
+    """Validate every CONTCAR under `root`, collecting all failures.
+
+    Unlike `build_entries`, this does not stop at the first problem.
+
+    Returns
+    -----------
+    tuple of (valid entries, list of (path, error message) for failures)
+    """
+    entries: dict[str, MXeneEntry] = {}
+    seen_at: dict[str, Path] = {}
+    failures: list[tuple[Path, str]] = []
+    for path in iter_structure_files(root):
+        try:
+            entry = entry_from_file(path)
+        except (ValueError, KeyError, IndexError, OSError) as exc:
+            failures.append((path, f"{type(exc).__name__}: {exc}"))
+            continue
+        if entry.mxeneId in entries:
+            failures.append(
+                (
+                    path,
+                    f"Duplicate mxeneId {entry.mxeneId!r} (also {seen_at[entry.mxeneId]})",
+                )
+            )
+            continue
+        entries[entry.mxeneId] = entry
+        seen_at[entry.mxeneId] = path
+    return list(entries.values()), failures
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Check a dataset from the command line and print a summary.
+
+    Usage: ``python -m mpcontribs.lux.projects.two_d_mxenes.pipelines.build_contributions MXENE_DATA``
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=main.__doc__.splitlines()[0])
+    parser.add_argument("root", help="Path to the MXENE_DATA folder")
+    args = parser.parse_args(argv)
+
+    entries, failures = check_dataset(args.root)
+    print(f"{len(entries)} structures valid, {len(failures)} failed\n")
+
+    counts: dict[tuple, int] = defaultdict(int)
+    for e in entries:
+        lab = e.labels
+        counts[(lab.metal, lab.nonmetal, lab.termination or "-", lab.n)] += 1
+    if counts:
+        print(f"{'M':<4}{'X':<4}{'T':<4}{'n':<4}count")
+        for (m, x, t, n), count in sorted(counts.items()):
+            print(f"{m:<4}{x:<4}{t:<4}{n:<4}{count}")
+        print()
+
+    root = Path(args.root)
+    for path, message in failures:
+        print(f"FAILED {path.relative_to(root)}\n    {message}")
+    return 1 if failures else 0
+
+
 def add_relative_stacking_energies(entries: list[MXeneEntry]) -> None:
     """Fill `relativeStackingEnergy` (meV/atom) within each composition."""
     groups: dict[str, list[MXeneEntry]] = defaultdict(list)
@@ -200,3 +267,7 @@ def _with_unit(value: float | None, unit: str) -> str | None:
     if value is None:
         return None
     return f"{value:.6g} {unit}".strip()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

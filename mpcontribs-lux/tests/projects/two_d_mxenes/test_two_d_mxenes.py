@@ -312,3 +312,24 @@ def _flatten(d, prefix=""):
 def test_ideal_builder_sanity():
     s = ideal_mxene("Ti", "C", 1, ["O"])
     assert np.isclose(s.lattice.gamma, 120.0)
+
+
+def test_check_dataset_collects_all_failures(dataset, capsys):
+    from mpcontribs.lux.projects.two_d_mxenes.pipelines.build_contributions import (
+        check_dataset,
+        main,
+    )
+
+    # a mislabelled structure (prismatic core in a `t` folder) and a bad folder name
+    for folder in ["Hf/m2x/t-1", "Hf/m2x/weird"]:
+        (dataset / folder).mkdir(parents=True)
+        shutil.copy(dataset / "Hf/m2x/h-1/CONTCAR", dataset / folder / "CONTCAR")
+
+    entries, failures = check_dataset(dataset)
+    assert len(entries) == 2
+    assert {p.parent.name for p, _ in failures} == {"t-1", "weird"}
+
+    assert main([str(dataset)]) == 1
+    out = capsys.readouterr().out
+    assert "2 structures valid, 2 failed" in out
+    assert "core coordination" in out and "Unrecognized MXene folder label" in out
